@@ -1,0 +1,47 @@
+use os
+use fmt
+use io
+use bytes
+
+fn main() {
+  match run() {
+    Ok(_) => os.Exit(0),
+    Err(err) => {
+      fmt.Println(err);
+      os.Exit(1);
+    }
+  }
+}
+
+fn run() -> Result<string, error> {
+  let s = \\{"hello": "world"}
+
+  let mut buffers: bytes.Buffer = zeroValue();
+  buffers.WriteString(s);
+
+  let decoder = Decoder.new(&buffers)?;
+  fmt.Println(decoder.decode());
+  Ok("ok")
+}
+
+enum Value {
+  Null,
+}
+
+struct Decoder {
+  s: string,
+}
+
+fn Decoder.new(r: io.Reader) -> Result<*Decoder, error> {
+  let s = io.ReadAll(r)?;
+
+  Ok(&Decoder {
+    s: fmt.Sprintf("%s", s),
+  })
+}
+
+impl (d: *Decoder) {
+  fn decode() -> Result<Value, string> {
+    Ok(Value.Null)
+  }
+}
