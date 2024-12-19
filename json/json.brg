@@ -2,6 +2,7 @@ use os
 use fmt
 use io
 use bytes
+use errors
 
 fn main() {
   match run() {
@@ -14,34 +15,80 @@ fn main() {
 }
 
 fn run() -> Result<string, error> {
-  let s = \\{"hello": "world"}
-
-  let mut buffers: bytes.Buffer = zeroValue();
-  buffers.WriteString(s);
-
-  let decoder = Decoder.new(&buffers)?;
-  fmt.Println(decoder.decode());
+  let decoder = Decoder.new(os.Stdin)?;
+  let v = decoder.decode()?;
+  print_value(v);
   Ok("ok")
 }
 
 enum Value {
   Null,
+  String(string),
+}
+
+fn print_value(v: Value) {
+  match v {
+    Value.Null => fmt.Print("null"),
+    Value.String(s) => {
+      let placeholder = \\ "%s"
+      fmt.Printf(placeholder, s);
+    }
+  }
 }
 
 struct Decoder {
-  s: string,
+  s: [byte],
 }
 
 fn Decoder.new(r: io.Reader) -> Result<*Decoder, error> {
   let s = io.ReadAll(r)?;
 
   Ok(&Decoder {
-    s: fmt.Sprintf("%s", s),
+    s: s,
   })
 }
 
 impl (d: *Decoder) {
-  fn decode() -> Result<Value, string> {
+  fn decode() -> Result<Value, error> {
+    if d.s.Len() == 0 {
+      return Err(errors.New("input is empty"));
+    }
+
+    match d.s[0] {
+      'n' => {
+        if d.s.Len() < 4 {
+          return Err(fmt.Errorf("unknwon input: %s", d.s))
+        }
+
+        if fmt.Sprintf("%s", d.s) != "null" {
+          return Err(fmt.Errorf("unknwon input: %s", d.s))
+        }
+
+        return Ok(Value.Null)
+      }
+      '"' => {
+        let mut last_doublequote = 1;
+        loop {
+          if d.s.Len() <= last_doublequote {
+            return Err(fmt.Errorf("no doublequote found: %s", d.s))
+          }
+
+          if d.s[last_doublequote] == '"' {
+            break;
+          }
+          last_doublequote = last_doublequote + 1
+        }
+
+        let mut i = 1;
+        let mut result = []
+        while i < last_doublequote {
+          result = result.Append(d.s[i])
+          i = i + 1;
+        }
+        return Ok(Value.String(fmt.Sprintf("%s", result)))
+      }
+      _ => return Err(fmt.Errorf("unknwon input: %s", d.s))
+    }
     Ok(Value.Null)
   }
 }
