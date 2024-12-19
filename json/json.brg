@@ -38,6 +38,7 @@ fn print_value(v: Value) {
 
 struct Decoder {
   s: [byte],
+  current_index: int,
 }
 
 fn Decoder.new(r: io.Reader) -> Result<*Decoder, error> {
@@ -45,6 +46,7 @@ fn Decoder.new(r: io.Reader) -> Result<*Decoder, error> {
 
   Ok(&Decoder {
     s: s,
+    current_index: 0,
   })
 }
 
@@ -54,20 +56,22 @@ impl (d: *Decoder) {
       return Err(errors.New("input is empty"));
     }
 
-    match d.s[0] {
+    match d.s[d.current_index] {
       'n' => {
-        if d.s.Len() < 4 {
+        if d.s.Len() < d.current_index + 4 {
           return Err(fmt.Errorf("unknwon input: %s", d.s))
         }
 
-        if fmt.Sprintf("%s", d.s) != "null" {
-          return Err(fmt.Errorf("unknwon input: %s", d.s))
+        let n = take(d.s, d.current_index, d.current_index+4);
+        if fmt.Sprintf("%s", n) != "null" {
+          return Err(fmt.Errorf("unknwon input: %s", n))
         }
 
+        d.current_index = d.current_index + 4
         return Ok(Value.Null)
       }
       '"' => {
-        let mut last_doublequote = 1;
+        let mut last_doublequote = d.current_index + 1;
         loop {
           if d.s.Len() <= last_doublequote {
             return Err(fmt.Errorf("no doublequote found: %s", d.s))
@@ -79,16 +83,22 @@ impl (d: *Decoder) {
           last_doublequote = last_doublequote + 1
         }
 
-        let mut i = 1;
-        let mut result = []
-        while i < last_doublequote {
-          result = result.Append(d.s[i])
-          i = i + 1;
-        }
+        let result = take(d.s, d.current_index+1, last_doublequote);
+        d.current_index = last_doublequote
         return Ok(Value.String(fmt.Sprintf("%s", result)))
       }
       _ => return Err(fmt.Errorf("unknwon input: %s", d.s))
     }
     Ok(Value.Null)
   }
+}
+
+fn take(s: [byte], start: int, end: int) -> [byte] {
+  let mut i = start;
+  let mut result = [];
+  while i < end {
+    result = result.Append(s[i]);
+    i = i + 1;
+  }
+  result
 }
