@@ -21,10 +21,15 @@ fn run() -> Result<string, error> {
   Ok("ok")
 }
 
+struct DictColumn {
+  key: string,
+  value: Value,
+}
+
 enum Value {
   Null,
   String(string),
-  Dict(string, *Value),
+  Dict([DictColumn]),
 }
 
 fn print_value(v: Value) {
@@ -34,10 +39,16 @@ fn print_value(v: Value) {
       let placeholder = \\"%s"
       fmt.Printf(placeholder, s);
     },
-    Value.Dict(key, value) => {
-      let placeholder = \\{"%s":
-      fmt.Printf(placeholder, key)
-      print_value(value.*)
+    Value.Dict(m) => {
+      fmt.Printf("{")
+      for (i, d) in m.Enumerate() {
+        let placeholder = \\"%s":
+        fmt.Printf(placeholder, d.key)
+        print_value(d.value)
+        if i < m.Len() {
+          fmt.Printf(",")
+        }
+      }
       fmt.Print("}")
     }
   }
@@ -96,31 +107,50 @@ impl (d: *Decoder) {
       }
       '{' => {
         d.current_index = d.current_index + 1;
-        let key = d.decode()?;
-        let mut key_value: string = ""
-        match key {
-          Value.String(s) => {
-            key_value = s
+
+        let mut result = []
+        loop {
+          let column = d.decode_single_dict()?;
+          result = result.Append(column)
+
+          if d.s[d.current_index] != ',' {
+            break
           }
-          _ => {return Err(fmt.Errorf("key should be string, got %s", key))}
+          d.current_index = d.current_index+1;
         }
-
-        if d.s[d.current_index] != ':' {
-          return Err(fmt.Errorf("expected ':' got '%s'", d.s[d.current_index]))
-        }
-
-        d.current_index = d.current_index + 1;
-        let value = d.decode()?;
 
         if d.s[d.current_index] != '}' {
           return Err(fmt.Errorf("expected '}' got '%s'", d.s[d.current_index]))
         }
 
-        return Ok(Value.Dict(key_value, &value))
+        d.current_index = d.current_index + 1;
+        return Ok(Value.Dict(result))
       }
       _ => return Err(fmt.Errorf("unknwon input: %s", d.s))
     }
     Ok(Value.Null)
+  }
+
+  fn decode_single_dict() -> Result<DictColumn, error> {
+      let key = d.decode()?;
+      let mut key_value: string = "";
+      match key {
+        Value.String(s) => {
+          key_value = s
+        }
+        _ => {
+          return Err(fmt.Errorf("key should be string, got %s", key))
+        }
+      }
+
+      if d.s[d.current_index] != ':' {
+        return Err(fmt.Errorf("expected ':' got '%s'", d.s[d.current_index]))
+      }
+
+      d.current_index = d.current_index + 1;
+      let value = d.decode()?;
+
+      return Ok(DictColumn{ key: key_value, value: value })
   }
 }
 
